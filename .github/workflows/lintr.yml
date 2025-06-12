@@ -1,23 +1,12 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-# lintr provides static code analysis for R.
-# It checks for adherence to a given style,
-# identifying syntax errors and possible semantic issues,
-# then reports them to you so you can take action.
-# More details at https://lintr.r-lib.org/
-
 name: lintr
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
-    # The branches below must be a subset of the branches above
     branches: [ "main" ]
   schedule:
-    - cron: '26 13 * * 4'
+    - cron: '23 3 * * 2'
 
 permissions:
   contents: read
@@ -35,17 +24,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup R
-        uses: r-lib/actions/setup-r@4e1feaf90520ec1215d1882fdddfe3411c08e492
-
-      - name: Setup lintr
-        uses: r-lib/actions/setup-r-dependencies@4e1feaf90520ec1215d1882fdddfe3411c08e492
+      - name: Cache R library dependencies
+        uses: actions/cache@v4
         with:
-          extra-packages: lintr
-
+          path: ~/.cache/R  # Cache the installed R libraries to speed up future runs
+          key: ${{ runner.os }}-r-libraries-${{ hashFiles('**/DESCRIPTION') }}
+          restore-keys: |
+            ${{ runner.os }}-r-libraries-
+      - name: Install R
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y r-base
+      - name: Install lintr package and dependencies
+        run: |
+          # Ensure that the installation path is writable
+          R_LIBS_USER="${HOME}/.local/lib/R/site-library"
+          mkdir -p "${R_LIBS_USER}"
+          
+          # Set the R_LIBS_USER environment variable and install lintr
+          R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
+          
+          # Additional dependencies can be added here
+          # R -e "install.packages('other-package', lib = '${R_LIBS_USER}')"
       - name: Run lintr
-        run: lintr::sarif_output(lintr::lint_dir("."), "lintr-results.sarif")
-        shell: Rscript {0}
+        run: |
+          # Ensure the lintr package is available and run the analysis
+          R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "lintr::sarif_output(lintr::lint_dir('.'), 'lintr-results.sarif')"
         continue-on-error: true
 
       - name: Upload analysis results to GitHub
